@@ -2,8 +2,6 @@
 
 A versatile and highly customizable EMA (Exponential Moving Average) crossover indicator for TradingView, written in Pine Script. This indicator is designed to provide clear buy and sell signals based on EMA crossovers and can be tailored to specific assets and timeframes through a powerful profiling system.
 
-\!(https://www.google.com/search?q=https://placehold.co/800x400/1B2631/FFFFFF%3Ftext%3DMadCat%2BEMA%2BCrossover%2BChart)
-
 ## **Overview**
 
 The MadCat EMA Crossover indicator plots fast and slow EMAs on your chart and generates buy/sell signals when they cross. What sets it apart is its ability to automatically switch between up to 20 different pre-configured profiles based on the ticker and timeframe you are currently viewing. This allows traders to apply optimized settings for various assets without manual adjustments.
