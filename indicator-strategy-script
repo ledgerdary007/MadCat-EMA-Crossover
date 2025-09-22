@@ -1,0 +1,211 @@
+// ########## Start of Script ###################
+
+//@version=5
+
+// Multi EMA Crossover
+// Originally developed by MadCat
+// Modified to remove ticker/timeframe profiles for simplicity
+
+strategy(title="MadCat EMA Crossover - Strategy", overlay=true, default_qty_type=strategy.fixed, default_qty_value=1, commission_type=strategy.commission.percent, commission_value=0.0, pyramiding=10)
+
+// === EMA Inputs ===
+group_ema_periods = "EMA Settings"
+shortEMAFast = input.int(9, "Fast EMA Period", minval=1, group=group_ema_periods)
+shortEMASlow = input.int(21, "Slow EMA Period", minval=1, group=group_ema_periods)
+
+// === Inputs ===
+group_backtest = "Backtest / Execution"
+backtestMode = input.string("Both", "Backtest Mode", options=["Both", "Long Only", "Short Only"], group=group_backtest)
+qtyPercent = input.float(10.0, "Position Size (% equity)", minval=0.01, maxval=100, step=0.01, group=group_backtest, tooltip="Percentage of equity to allocate per trade.")
+allow_fractional = input.bool(true, "Allow fractional qty", group=group_backtest, tooltip="Enable to allow fractional shares (e.g., 0.5).")
+useMarketForEntries = input.bool(true, "Use market entries", group=group_backtest, tooltip="Checked = market orders; unchecked = limit orders at close price.")
+startDate = input.time(timestamp("01 Jan 2023 00:00 UTC"), "Backtest Start Date", group=group_backtest, tooltip="Trades before this date are excluded from stats.")
+debugLogs = input.bool(false, "Enable Debug Logs", group=group_backtest, tooltip="Enable to log win rate and start date changes for debugging.")
+
+// === Other EMA Periods ===
+ema50Period = input.int(50, "50 EMA Period", minval=1, group=group_ema_periods)
+ema100Period = input.int(100, "100 EMA Period", minval=1, group=group_ema_periods)
+ema200Period = input.int(200, "200 EMA Period", minval=1, group=group_ema_periods)
+showShortTF = input.bool(true, "Show Short TF EMAs", group=group_ema_periods)
+
+// === Signal Appearance ===
+group_signals = "Signal Appearance"
+signalShapeOpt = input.string("Triangle", "Signal Shape", options=["Triangle", "Circle", "Diamond"], group=group_signals)
+signalPosOpt = input.string("Below Bar", "Signal Position", options=["Above Bar", "Below Bar", "Top", "Bottom"], group=group_signals)
+
+// === Signal Toggles ===
+showBuyShort = input.bool(true, "Show Buy Short", group="Short EMA Signal Toggles")
+showSellShort = input.bool(true, "Show Sell Short", group="Short EMA Signal Toggles")
+showEMA50 = input.bool(true, "Show 50 EMA", group=group_ema_periods)
+showEMA100 = input.bool(true, "Show 100 EMA", group=group_ema_periods)
+showEMA200 = input.bool(true, "Show 200 EMA", group=group_ema_periods)
+
+// === Alert Condition Inputs ===
+group_alerts = "Alert Settings"
+buyShortCondition = input.string("None", "Short Buy EMA Condition", options=["None", "Below 50 EMA", "Below 100 EMA", "Below 200 EMA"], group=group_alerts, tooltip="Filter buy signals based on Fast EMA position relative to longer-term EMA.")
+sellShortCondition = input.string("None", "Short Sell EMA Condition", options=["None", "Above 50 EMA", "Above 100 EMA", "Above 200 EMA"], group=group_alerts, tooltip="Filter sell signals based on Fast EMA position relative to longer-term EMA.")
+
+// === Map Shape & Position ===
+buyShape = signalShapeOpt == "Triangle" ? shape.triangleup : signalShapeOpt == "Circle" ? shape.circle : shape.diamond
+sellShape = signalShapeOpt == "Triangle" ? shape.triangledown : signalShapeOpt == "Circle" ? shape.circle : shape.diamond
+pos = signalPosOpt == "Above Bar" ? location.abovebar : signalPosOpt == "Below Bar" ? location.belowbar : signalPosOpt == "Top" ? location.top : location.bottom
+signalSize = size.tiny
+
+// === EMA Calculations ===
+emaShortFast = ta.ema(close, shortEMAFast)
+emaShortSlow = ta.ema(close, shortEMASlow)
+ema50 = ta.ema(close, ema50Period)
+ema100 = ta.ema(close, ema100Period)
+ema200 = ta.ema(close, ema200Period)
+
+// === Plot EMAs ===
+plot(showEMA50 ? ema50 : na, title="50 EMA", color=color.blue, linewidth=2)
+plot(showEMA100 ? ema100 : na, title="100 EMA", color=color.orange, linewidth=2)
+plot(showEMA200 ? ema200 : na, title="200 EMA", color=color.green, linewidth=2)
+
+// === Fill EMAs ===
+fastPlot = plot(showShortTF ? emaShortFast : na, title="Fast EMA")
+slowPlot = plot(showShortTF ? emaShortSlow : na, title="Slow EMA")
+fillColorEMAs = showShortTF ? (emaShortFast > emaShortSlow ? color.new(color.green, 50) : color.new(color.red, 50)) : na
+fill(fastPlot, slowPlot, color=fillColorEMAs)
+
+// === EMA on Chart Timeframe ===
+[emaShortFast_tf, emaShortSlow_tf] = request.security(syminfo.tickerid, timeframe.period, [ta.ema(close, shortEMAFast), ta.ema(close, shortEMASlow)], barmerge.gaps_off, barmerge.lookahead_off)
+
+// === Cross Signals ===
+buyShort_tf = ta.crossover(emaShortFast_tf, emaShortSlow_tf)
+sellShort_tf = ta.crossunder(emaShortFast_tf, emaShortSlow_tf)
+
+// === Combine Signals ===
+buySignal = showShortTF and showBuyShort and buyShort_tf
+sellSignal = showShortTF and showSellShort and sellShort_tf
+
+// === Plot Signals ===
+plotshape(buySignal, title="Buy Signal", location=pos, color=color.green, style=buyShape, size=signalSize, text="Buy", textcolor=color.green)
+plotshape(sellSignal, title="Sell Signal", location=pos, color=color.red, style=sellShape, size=signalSize, text="Sell", textcolor=color.red)
+
+// === Buy Alert Condition (First Set with Filters) ===
+buyShortAlert = buyShort_tf
+if buyShortCondition == "Below 50 EMA"
+    buyShortAlert := buyShortAlert and emaShortFast_tf < ema50
+else if buyShortCondition == "Below 100 EMA"
+    buyShortAlert := buyShortAlert and emaShortFast_tf < ema100
+else if buyShortCondition == "Below 200 EMA"
+    buyShortAlert := buyShortAlert and emaShortFast_tf < ema200
+
+// === Sell Alert Condition (First Set with Filters) ===
+sellShortAlert = sellShort_tf
+if sellShortCondition == "Above 50 EMA"
+    sellShortAlert := sellShortAlert and emaShortFast_tf > ema50
+else if sellShortCondition == "Above 100 EMA"
+    sellShortAlert := sellShortAlert and emaShortFast_tf > ema100
+else if sellShortCondition == "Above 200 EMA"
+    sellShortAlert := sellShortAlert and emaShortFast_tf > ema200
+
+// === Alert Conditions ===
+// Alert conditions MUST be placed AFTER signal definitions and BEFORE plot signals
+
+// Filtered Alerts (with EMA conditions)
+alertcondition(buyShortAlert, title="Buy EMA (Filtered)", message="EMA Crossover Buy Signal (Filtered) - {{ticker}} at {{close}}")
+alertcondition(sellShortAlert, title="Sell EMA (Filtered)", message="EMA Crossunder Sell Signal (Filtered) - {{ticker}} at {{close}}")
+
+// Pure Crossover Alerts
+alertcondition(buyShort_tf, title="Buy EMA (Pure)", message="EMA Crossover Buy Signal (Pure) - {{ticker}} at {{close}}")
+alertcondition(sellShort_tf, title="Sell EMA (Pure)", message="EMA Crossunder Sell Signal (Pure) - {{ticker}} at {{close}}")
+
+// Visual Signal Alerts (when Buy/Sell prints on chart)
+alertcondition(buySignal, title="Buy Signal Printed", message="Buy Signal Displayed - {{ticker}} at {{close}}")
+alertcondition(sellSignal, title="Sell Signal Printed", message="Sell Signal Displayed - {{ticker}} at {{close}}")
+
+// Combined Alert
+alertcondition(buySignal or sellSignal, title="Any Signal", message="Signal Triggered - {{ticker}} at {{close}}")
+
+// === Compute Position Quantity ===
+qtyRaw = strategy.equity > 0 and close > 0 ? (strategy.equity * qtyPercent / 100) / close : 0
+qty = allow_fractional ? qtyRaw : math.max(1, math.floor(qtyRaw))
+
+canLong = (backtestMode == "Both" or backtestMode == "Long Only") and qty > 0
+canShort = (backtestMode == "Both" or backtestMode == "Short Only") and qty > 0
+
+// === Validate Start Date ===
+validStartDate = startDate <= time
+if not validStartDate and debugLogs
+    log.warning("Start date is in the future. No trades will execute until " + str.format_time(startDate, "yyyy-MM-dd HH:mm"))
+
+// === Plot Signals ===
+plotshape(buySignal, title="Buy Signal", location=pos, color=color.green, style=buyShape, size=signalSize, text="Buy", textcolor=color.green)
+plotshape(sellSignal, title="Sell Signal", location=pos, color=color.red, style=sellShape, size=signalSize, text="Sell", textcolor=color.red)
+
+// === Strategy Execution ===
+if buySignal and canLong and validStartDate
+    limitPrice = useMarketForEntries ? na : close
+    strategy.entry("Long", strategy.long, qty=qty, limit=limitPrice, alert_message="Buy Signal: {{ticker}} at {{close}}")
+
+if sellSignal and canShort and validStartDate
+    limitPrice = useMarketForEntries ? na : close
+    strategy.entry("Short", strategy.short, qty=qty, limit=limitPrice, alert_message="Sell Signal: {{ticker}} at {{close}}")
+
+// === Close Opposite Positions ===
+if buySignal and strategy.position_size < 0 and validStartDate
+    strategy.close("Short", alert_message="Closing Short: {{ticker}} at {{close}}")
+if sellSignal and strategy.position_size > 0 and validStartDate
+    strategy.close("Long", alert_message="Closing Long: {{ticker}} at {{close}}")
+
+// === Track trades and stats since startDate with reset on input change ===
+var int baseClosed = 0
+var int baseWins = 0
+var int baseLosses = 0
+var float baseNetProfit = 0.0
+var int lastStartDate = 0
+var table statsTable = na
+
+// Reset stats and table when startDate changes
+if lastStartDate != startDate
+    if debugLogs
+        log.info("Start Date Changed to: " + str.format_time(startDate, "yyyy-MM-dd HH:mm"))
+    baseClosed      := strategy.closedtrades
+    baseWins        := strategy.wintrades
+    baseLosses      := strategy.losstrades
+    baseNetProfit   := strategy.netprofit
+    lastStartDate   := startDate
+    statsTable      := na  // Clear table to force recreation
+
+    if debugLogs
+        log.info("Stats Reset - Closed Trades: " + str.tostring(baseClosed) + ", Wins: " + str.tostring(baseWins) + ", Losses: " + str.tostring(baseLosses))
+
+// Calculate stats after startDate
+closedTradesAfterStart = strategy.closedtrades - baseClosed
+winTradesAfterStart = strategy.wintrades - baseWins
+lossTradesAfterStart = strategy.losstrades - baseLosses
+netProfitAfterStart = strategy.netprofit - baseNetProfit
+winRateAfterStart = closedTradesAfterStart > 0 ? (winTradesAfterStart * 100.0 / closedTradesAfterStart) : 0.0
+
+// Log win rate for debugging
+if debugLogs and (lastStartDate != startDate or strategy.closedtrades != baseClosed)
+    log.info("Win Rate Updated: " + str.tostring(winRateAfterStart, "#.##") + "%")
+
+// === Dynamic Backtest Stats Table (with Start Date) ===
+if barstate.isconfirmed or lastStartDate != startDate
+    // Recreate table if it doesn't exist
+    if na(statsTable)
+        statsTable := table.new(position.top_right, 1, 10)
+
+    // Format Start Date reliably
+    startDateStr = str.format_time(startDate, "yyyy-MM-dd")
+
+    // Dynamic colors/strings
+    winRateDisplay   = str.tostring(winRateAfterStart, "#.##") + "%"
+    netProfitDisplay = str.tostring(netProfitAfterStart, format.mintick)
+    netProfitColor   = netProfitAfterStart >= 0 ? color.green : color.red
+
+    // Update table
+    table.cell(statsTable, 0, 0, "Backtest Start: " + startDateStr, text_color=color.white, bgcolor=color.new(#ffffff, 0))
+    table.cell(statsTable, 0, 1, "Closed Trades: " + str.tostring(closedTradesAfterStart, "#"), text_color=color.rgb(0, 0, 0), bgcolor=color.new(#cfd0d1, 0))
+    table.cell(statsTable, 0, 2, "Wins: " + str.tostring(winTradesAfterStart, "#"), text_color=color.green, bgcolor=color.new(#cfd0d1, 0))
+    table.cell(statsTable, 0, 3, "Losses: " + str.tostring(lossTradesAfterStart, "#"), text_color=color.red, bgcolor=color.new(#cfd0d1, 0))
+    table.cell(statsTable, 0, 4, "Win Rate: " + winRateDisplay, text_color=color.rgb(0, 0, 0), bgcolor=color.new(#cfd0d1, 0))
+    table.cell(statsTable, 0, 5, "Net P/L: " + netProfitDisplay, text_color=netProfitColor, bgcolor=color.new(#cfd0d1, 0))
+    table.cell(statsTable, 0, 6, "━━━━━━━━━━━━", text_color=color.rgb(0, 0, 0), bgcolor=color.new(#cfd0d1, 0))
+    table.cell(statsTable, 0, 7, "Ticker: " + syminfo.ticker + " | TF: " + timeframe.period, text_color=color.rgb(0, 0, 0), bgcolor=color.new(#cfd0d1, 0))
+    table.cell(statsTable, 0, 8, "Fast EMA: " + str.tostring(shortEMAFast), text_color=color.rgb(0, 0, 0), bgcolor=color.new(#cfd0d1, 0))
+    table.cell(statsTable, 0, 9, "Slow EMA: " + str.tostring(shortEMASlow), text_color=color.rgb(0, 0, 0), bgcolor=color.new(#cfd0d1, 0))
