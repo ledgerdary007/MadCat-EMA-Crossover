@@ -15,7 +15,7 @@ shortEMASlow = input.int(21, "Slow EMA Period", minval=1, group=group_ema_period
 
 // === Inputs ===
 group_backtest = "Backtest / Execution"
-backtestMode = input.string("Both", "Backtest Mode", options=["Both", "Long Only", "Short Only"], group=group_backtest)
+backtestMode = input.string("Both", "Backtest Mode", options=["Both", "Long", "Short"], group=group_backtest)
 qtyPercent = input.float(10.0, "Position Size (% equity)", minval=0.01, maxval=100, step=0.01, group=group_backtest, tooltip="Percentage of equity to allocate per trade.")
 allow_fractional = input.bool(true, "Allow fractional qty", group=group_backtest, tooltip="Enable to allow fractional shares (e.g., 0.5).")
 useMarketForEntries = input.bool(true, "Use market entries", group=group_backtest, tooltip="Checked = market orders; unchecked = limit orders at close price.")
@@ -26,7 +26,7 @@ debugLogs = input.bool(false, "Enable Debug Logs", group=group_backtest, tooltip
 ema50Period = input.int(50, "50 EMA Period", minval=1, group=group_ema_periods)
 ema100Period = input.int(100, "100 EMA Period", minval=1, group=group_ema_periods)
 ema200Period = input.int(200, "200 EMA Period", minval=1, group=group_ema_periods)
-showShortTF = input.bool(true, "Show Short TF EMAs", group=group_ema_periods)
+showShortTF = input.bool(true, "Show EMA Ribbon", group=group_ema_periods)
 
 // === Signal Appearance ===
 group_signals = "Signal Appearance"
@@ -34,8 +34,8 @@ signalShapeOpt = input.string("Triangle", "Signal Shape", options=["Triangle", "
 signalPosOpt = input.string("Below Bar", "Signal Position", options=["Above Bar", "Below Bar", "Top", "Bottom"], group=group_signals)
 
 // === Signal Toggles ===
-showBuyShort = input.bool(true, "Show Buy Short", group="Short EMA Signal Toggles")
-showSellShort = input.bool(true, "Show Sell Short", group="Short EMA Signal Toggles")
+showBuyShort = input.bool(true, "Show Buy Signal", group="Short EMA Signal Toggles")
+showSellShort = input.bool(true, "Show Sell Signal", group="Short EMA Signal Toggles")
 showEMA50 = input.bool(true, "Show 50 EMA", group=group_ema_periods)
 showEMA100 = input.bool(true, "Show 100 EMA", group=group_ema_periods)
 showEMA200 = input.bool(true, "Show 200 EMA", group=group_ema_periods)
