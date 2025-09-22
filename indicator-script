@@ -1,0 +1,371 @@
+// ########## Start of Script ###################
+
+//@version=5
+// Originally developed by MadCat
+// Modified to support ticker AND timeframe specific EMA configurations
+// Added multiple profile system for automatic EMA selection
+
+// Converted to Indicator for Alert Functionality
+indicator(title="MadCat EMA Crossover", overlay=true)
+
+// === Helper Functions ===
+f_normalizeTimeframe(_tf) =>
+    _tf == "1" ? "1" : _tf == "3" ? "3" : _tf == "5" ? "5" : _tf == "15" ? "15" : _tf == "30" ? "30" : _tf == "45" ? "45" : _tf == "60" ? "60" : _tf == "120" ? "120" : _tf == "180" ? "180" : _tf == "240" ? "240" : _tf == "D" or _tf == "1D" ? "D" : _tf == "W" or _tf == "1W" ? "W" : _tf == "M" or _tf == "1M" ? "M" : _tf
+
+// This function has been rewritten to be less sensitive to indentation errors.
+f_getTablePosition(pos) =>
+    _pos = position.top_right // Default value
+    if pos == "Top Left"
+        _pos := position.top_left
+    else if pos == "Bottom Right"
+        _pos := position.bottom_right
+    else if pos == "Bottom Left"
+        _pos := position.bottom_left
+    _pos // Return the final value
+
+
+// === Profile Configuration Inputs ===
+group_profiles = "EMA Profile Configuration"
+useProfiles = input.bool(true, "Enable Ticker/Timeframe Profiles", group=group_profiles, tooltip="When enabled, automatically selects EMA values based on ticker and timeframe", display=display.none)
+defaultFastEMA = input.int(9, "Default Fast EMA", minval=1, group=group_profiles, display=display.none)
+defaultSlowEMA = input.int(21, "Default Slow EMA", minval=1, group=group_profiles, display=display.none)
+
+// Profile 1
+profile1_enabled = input.bool(false, "Profile 1 Enabled", group="Profile 1", inline="p1_enable", display=display.none)
+profile1_ticker = input.string("", "Ticker", group="Profile 1", inline="p1_config", display=display.none)
+profile1_timeframe = input.string("5", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 1", inline="p1_config", display=display.none)
+profile1_fastEMA = input.int(9, "Fast EMA", minval=1, group="Profile 1", inline="p1_ema", display=display.none)
+profile1_slowEMA = input.int(21, "Slow EMA", minval=1, group="Profile 1", inline="p1_ema", display=display.none)
+
+// Profile 2
+profile2_enabled = input.bool(false, "Profile 2 Enabled", group="Profile 2", inline="p2_enable", display=display.none)
+profile2_ticker = input.string("", "Ticker", group="Profile 2", inline="p2_config", display=display.none)
+profile2_timeframe = input.string("15", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 2", inline="p2_config", display=display.none)
+profile2_fastEMA = input.int(12, "Fast EMA", minval=1, group="Profile 2", inline="p2_ema", display=display.none)
+profile2_slowEMA = input.int(26, "Slow EMA", minval=1, group="Profile 2", inline="p2_ema", display=display.none)
+
+// Profile 3
+profile3_enabled = input.bool(false, "Profile 3 Enabled", group="Profile 3", inline="p3_enable", display=display.none)
+profile3_ticker = input.string("", "Ticker", group="Profile 3", inline="p3_config", display=display.none)
+profile3_timeframe = input.string("5", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 3", inline="p3_config", display=display.none)
+profile3_fastEMA = input.int(8, "Fast EMA", minval=1, group="Profile 3", inline="p3_ema", display=display.none)
+profile3_slowEMA = input.int(20, "Slow EMA", minval=1, group="Profile 3", inline="p3_ema", display=display.none)
+
+// Profile 4
+profile4_enabled = input.bool(false, "Profile 4 Enabled", group="Profile 4", inline="p4_enable", display=display.none)
+profile4_ticker = input.string("", "Ticker", group="Profile 4", inline="p4_config", display=display.none)
+profile4_timeframe = input.string("15", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 4", inline="p4_config", display=display.none)
+profile4_fastEMA = input.int(10, "Fast EMA", minval=1, group="Profile 4", inline="p4_ema", display=display.none)
+profile4_slowEMA = input.int(22, "Slow EMA", minval=1, group="Profile 4", inline="p4_ema", display=display.none)
+
+// Profile 5
+profile5_enabled = input.bool(false, "Profile 5 Enabled", group="Profile 5", inline="p5_enable", display=display.none)
+profile5_ticker = input.string("", "Ticker", group="Profile 5", inline="p5_config", display=display.none)
+profile5_timeframe = input.string("5", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 5", inline="p5_config", display=display.none)
+profile5_fastEMA = input.int(7, "Fast EMA", minval=1, group="Profile 5", inline="p5_ema", display=display.none)
+profile5_slowEMA = input.int(18, "Slow EMA", minval=1, group="Profile 5", inline="p5_ema", display=display.none)
+
+// Profile 6
+profile6_enabled = input.bool(false, "Profile 6 Enabled", group="Profile 6", inline="p6_enable", display=display.none)
+profile6_ticker = input.string("", "Ticker", group="Profile 6", inline="p6_config", display=display.none)
+profile6_timeframe = input.string("5", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 6", inline="p6_config", display=display.none)
+profile6_fastEMA = input.int(9, "Fast EMA", minval=1, group="Profile 6", inline="p6_ema", display=display.none)
+profile6_slowEMA = input.int(21, "Slow EMA", minval=1, group="Profile 6", inline="p6_ema", display=display.none)
+
+// Profile 7
+profile7_enabled = input.bool(false, "Profile 7 Enabled", group="Profile 7", inline="p7_enable", display=display.none)
+profile7_ticker = input.string("", "Ticker", group="Profile 7", inline="p7_config", display=display.none)
+profile7_timeframe = input.string("60", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 7", inline="p7_config", display=display.none)
+profile7_fastEMA = input.int(12, "Fast EMA", minval=1, group="Profile 7", inline="p7_ema", display=display.none)
+profile7_slowEMA = input.int(26, "Slow EMA", minval=1, group="Profile 7", inline="p7_ema", display=display.none)
+
+// Profile 8
+profile8_enabled = input.bool(false, "Profile 8 Enabled", group="Profile 8", inline="p8_enable", display=display.none)
+profile8_ticker = input.string("", "Ticker", group="Profile 8", inline="p8_config", display=display.none)
+profile8_timeframe = input.string("240", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 8", inline="p8_config", display=display.none)
+profile8_fastEMA = input.int(20, "Fast EMA", minval=1, group="Profile 8", inline="p8_ema", display=display.none)
+profile8_slowEMA = input.int(50, "Slow EMA", minval=1, group="Profile 8", inline="p8_ema", display=display.none)
+
+// Profile 9
+profile9_enabled = input.bool(false, "Profile 9 Enabled", group="Profile 9", inline="p9_enable", display=display.none)
+profile9_ticker = input.string("", "Ticker", group="Profile 9", inline="p9_config", display=display.none)
+profile9_timeframe = input.string("D", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 9", inline="p9_config", display=display.none)
+profile9_fastEMA = input.int(10, "Fast EMA", minval=1, group="Profile 9", inline="p9_ema", display=display.none)
+profile9_slowEMA = input.int(30, "Slow EMA", minval=1, group="Profile 9", inline="p9_ema", display=display.none)
+
+// Profile 10
+profile10_enabled = input.bool(false, "Profile 10 Enabled", group="Profile 10", inline="p10_enable", display=display.none)
+profile10_ticker = input.string("", "Ticker", group="Profile 10", inline="p10_config", display=display.none)
+profile10_timeframe = input.string("5", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 10", inline="p10_config", display=display.none)
+profile10_fastEMA = input.int(8, "Fast EMA", minval=1, group="Profile 10", inline="p10_ema", display=display.none)
+profile10_slowEMA = input.int(19, "Slow EMA", minval=1, group="Profile 10", inline="p10_ema", display=display.none)
+
+// Profile 11
+profile11_enabled = input.bool(false, "Profile 11 Enabled", group="Profile 11", inline="p11_enable", display=display.none)
+profile11_ticker = input.string("", "Ticker", group="Profile 11", inline="p11_config", display=display.none)
+profile11_timeframe = input.string("5", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 11", inline="p11_config", display=display.none)
+profile11_fastEMA = input.int(9, "Fast EMA", minval=1, group="Profile 11", inline="p11_ema", display=display.none)
+profile11_slowEMA = input.int(21, "Slow EMA", minval=1, group="Profile 11", inline="p11_ema", display=display.none)
+
+// Profile 12
+profile12_enabled = input.bool(false, "Profile 12 Enabled", group="Profile 12", inline="p12_enable", display=display.none)
+profile12_ticker = input.string("", "Ticker", group="Profile 12", inline="p12_config", display=display.none)
+profile12_timeframe = input.string("15", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 12", inline="p12_config", display=display.none)
+profile12_fastEMA = input.int(12, "Fast EMA", minval=1, group="Profile 12", inline="p12_ema", display=display.none)
+profile12_slowEMA = input.int(26, "Slow EMA", minval=1, group="Profile 12", inline="p12_ema", display=display.none)
+
+// Profile 13
+profile13_enabled = input.bool(false, "Profile 13 Enabled", group="Profile 13", inline="p13_enable", display=display.none)
+profile13_ticker = input.string("", "Ticker", group="Profile 13", inline="p13_config", display=display.none)
+profile13_timeframe = input.string("60", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 13", inline="p13_config", display=display.none)
+profile13_fastEMA = input.int(8, "Fast EMA", minval=1, group="Profile 13", inline="p13_ema", display=display.none)
+profile13_slowEMA = input.int(20, "Slow EMA", minval=1, group="Profile 13", inline="p13_ema", display=display.none)
+
+// Profile 14
+profile14_enabled = input.bool(false, "Profile 14 Enabled", group="Profile 14", inline="p14_enable", display=display.none)
+profile14_ticker = input.string("", "Ticker", group="Profile 14", inline="p14_config", display=display.none)
+profile14_timeframe = input.string("240", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 14", inline="p14_config", display=display.none)
+profile14_fastEMA = input.int(10, "Fast EMA", minval=1, group="Profile 14", inline="p14_ema", display=display.none)
+profile14_slowEMA = input.int(22, "Slow EMA", minval=1, group="Profile 14", inline="p14_ema", display=display.none)
+
+// Profile 15
+profile15_enabled = input.bool(false, "Profile 15 Enabled", group="Profile 15", inline="p15_enable", display=display.none)
+profile15_ticker = input.string("", "Ticker", group="Profile 15", inline="p15_config", display=display.none)
+profile15_timeframe = input.string("D", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 15", inline="p15_config", display=display.none)
+profile15_fastEMA = input.int(7, "Fast EMA", minval=1, group="Profile 15", inline="p15_ema", display=display.none)
+profile15_slowEMA = input.int(18, "Slow EMA", minval=1, group="Profile 15", inline="p15_ema", display=display.none)
+
+// Profile 16
+profile16_enabled = input.bool(false, "Profile 16 Enabled", group="Profile 16", inline="p16_enable", display=display.none)
+profile16_ticker = input.string("", "Ticker", group="Profile 16", inline="p16_config", display=display.none)
+profile16_timeframe = input.string("5", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 16", inline="p16_config", display=display.none)
+profile16_fastEMA = input.int(9, "Fast EMA", minval=1, group="Profile 16", inline="p16_ema", display=display.none)
+profile16_slowEMA = input.int(21, "Slow EMA", minval=1, group="Profile 16", inline="p16_ema", display=display.none)
+
+// Profile 17
+profile17_enabled = input.bool(false, "Profile 17 Enabled", group="Profile 17", inline="p17_enable", display=display.none)
+profile17_ticker = input.string("", "Ticker", group="Profile 17", inline="p17_config", display=display.none)
+profile17_timeframe = input.string("15", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 17", inline="p17_config", display=display.none)
+profile17_fastEMA = input.int(12, "Fast EMA", minval=1, group="Profile 17", inline="p17_ema", display=display.none)
+profile17_slowEMA = input.int(26, "Slow EMA", minval=1, group="Profile 17", inline="p17_ema", display=display.none)
+
+// Profile 18
+profile18_enabled = input.bool(false, "Profile 18 Enabled", group="Profile 18", inline="p18_enable", display=display.none)
+profile18_ticker = input.string("", "Ticker", group="Profile 18", inline="p18_config", display=display.none)
+profile18_timeframe = input.string("60", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 18", inline="p18_config", display=display.none)
+profile18_fastEMA = input.int(20, "Fast EMA", minval=1, group="Profile 18", inline="p18_ema", display=display.none)
+profile18_slowEMA = input.int(50, "Slow EMA", minval=1, group="Profile 18", inline="p18_ema", display=display.none)
+
+// Profile 19
+profile19_enabled = input.bool(false, "Profile 19 Enabled", group="Profile 19", inline="p19_enable", display=display.none)
+profile19_ticker = input.string("", "Ticker", group="Profile 19", inline="p19_config", display=display.none)
+profile19_timeframe = input.string("240", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 19", inline="p19_config", display=display.none)
+profile19_fastEMA = input.int(10, "Fast EMA", minval=1, group="Profile 19", inline="p19_ema", display=display.none)
+profile19_slowEMA = input.int(30, "Slow EMA", minval=1, group="Profile 19", inline="p19_ema", display=display.none)
+
+// Profile 20
+profile20_enabled = input.bool(false, "Profile 20 Enabled", group="Profile 20", inline="p20_enable", display=display.none)
+profile20_ticker = input.string("", "Ticker", group="Profile 20", inline="p20_config", display=display.none)
+profile20_timeframe = input.string("D", "Timeframe", options=["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"], group="Profile 20", inline="p20_config", display=display.none)
+profile20_fastEMA = input.int(8, "Fast EMA", minval=1, group="Profile 20", inline="p20_ema", display=display.none)
+profile20_slowEMA = input.int(19, "Slow EMA", minval=1, group="Profile 20", inline="p20_ema", display=display.none)
+
+// === Table Settings ===
+group_table = "Display Table"
+showTable = input.bool(true, "Show Info Table", group=group_table)
+tablePosition = input.string("Top Right", "Table Position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=group_table, display=display.none)
+
+// === Other EMA Periods ===
+group_ema_periods = "Other EMA Settings"
+ema50Period = input.int(50, "50 EMA Period", minval=1, group=group_ema_periods, display=display.none)
+ema100Period = input.int(100, "100 EMA Period", minval=1, group=group_ema_periods, display=display.none)
+ema200Period = input.int(200, "200 EMA Period", minval=1, group=group_ema_periods, display=display.none)
+showShortTF = input.bool(true, "Show Short TF EMAs", group=group_ema_periods, display=display.none)
+
+// === Signal Appearance ===
+group_signals = "Signal Appearance"
+signalShapeOpt = input.string("Triangle", "Signal Shape", options=["Triangle", "Circle", "Diamond"], group=group_signals, display=display.none)
+signalPosOpt = input.string("Below Bar", "Signal Position", options=["Above Bar", "Below Bar", "Top", "Bottom"], group=group_signals, display=display.none)
+
+// === Signal Toggles ===
+showBuyShort = input.bool(true, "Show Buy Short", group="Short EMA Signal Toggles", display=display.none)
+showSellShort = input.bool(true, "Show Sell Short", group="Short EMA Signal Toggles", display=display.none)
+showEMA50 = input.bool(true, "Show 50 EMA", group=group_ema_periods, display=display.none)
+showEMA100 = input.bool(true, "Show 100 EMA", group=group_ema_periods, display=display.none)
+showEMA200 = input.bool(true, "Show 200 EMA", group=group_ema_periods, display=display.none)
+
+// === Alert Condition Inputs ===
+group_alerts = "Alert Settings"
+buyShortCondition = input.string("None", "Short Buy EMA Condition", options=["None", "Below 50 EMA", "Below 100 EMA", "Below 200 EMA"], group=group_alerts, tooltip="Filter buy signals based on Fast EMA position relative to longer-term EMA.", display=display.none)
+sellShortCondition = input.string("None", "Short Sell EMA Condition", options=["None", "Above 50 EMA", "Above 100 EMA", "Above 200 EMA"], group=group_alerts, tooltip="Filter sell signals based on Fast EMA position relative to longer-term EMA.", display=display.none)
+
+
+// === Auto-Select EMA Values Based on Current Ticker and Timeframe ===
+currentTicker = syminfo.ticker
+currentTimeframe = f_normalizeTimeframe(timeframe.period)
+
+shortEMAFast = defaultFastEMA
+shortEMASlow = defaultSlowEMA
+profileMatched = "Default"
+
+if useProfiles
+    if profile1_enabled and profile1_ticker != "" and currentTicker == profile1_ticker and currentTimeframe == profile1_timeframe
+        shortEMAFast := profile1_fastEMA
+        shortEMASlow := profile1_slowEMA
+        profileMatched := "Profile 1"
+    else if profile2_enabled and profile2_ticker != "" and currentTicker == profile2_ticker and currentTimeframe == profile2_timeframe
+        shortEMAFast := profile2_fastEMA
+        shortEMASlow := profile2_slowEMA
+        profileMatched := "Profile 2"
+    else if profile3_enabled and profile3_ticker != "" and currentTicker == profile3_ticker and currentTimeframe == profile3_timeframe
+        shortEMAFast := profile3_fastEMA
+        shortEMASlow := profile3_slowEMA
+        profileMatched := "Profile 3"
+    else if profile4_enabled and profile4_ticker != "" and currentTicker == profile4_ticker and currentTimeframe == profile4_timeframe
+        shortEMAFast := profile4_fastEMA
+        shortEMASlow := profile4_slowEMA
+        profileMatched := "Profile 4"
+    else if profile5_enabled and profile5_ticker != "" and currentTicker == profile5_ticker and currentTimeframe == profile5_timeframe
+        shortEMAFast := profile5_fastEMA
+        shortEMASlow := profile5_slowEMA
+        profileMatched := "Profile 5"
+    else if profile6_enabled and profile6_ticker != "" and currentTicker == profile6_ticker and currentTimeframe == profile6_timeframe
+        shortEMAFast := profile6_fastEMA
+        shortEMASlow := profile6_slowEMA
+        profileMatched := "Profile 6"
+    else if profile7_enabled and profile7_ticker != "" and currentTicker == profile7_ticker and currentTimeframe == profile7_timeframe
+        shortEMAFast := profile7_fastEMA
+        shortEMASlow := profile7_slowEMA
+        profileMatched := "Profile 7"
+    else if profile8_enabled and profile8_ticker != "" and currentTicker == profile8_ticker and currentTimeframe == profile8_timeframe
+        shortEMAFast := profile8_fastEMA
+        shortEMASlow := profile8_slowEMA
+        profileMatched := "Profile 8"
+    else if profile9_enabled and profile9_ticker != "" and currentTicker == profile9_ticker and currentTimeframe == profile9_timeframe
+        shortEMAFast := profile9_fastEMA
+        shortEMASlow := profile9_slowEMA
+        profileMatched := "Profile 9"
+    else if profile10_enabled and profile10_ticker != "" and currentTicker == profile10_ticker and currentTimeframe == profile10_timeframe
+        shortEMAFast := profile10_fastEMA
+        shortEMASlow := profile10_slowEMA
+        profileMatched := "Profile 10"
+    else if profile11_enabled and profile11_ticker != "" and currentTicker == profile11_ticker and currentTimeframe == profile11_timeframe
+        shortEMAFast := profile11_fastEMA
+        shortEMASlow := profile11_slowEMA
+        profileMatched := "Profile 11"
+    else if profile12_enabled and profile12_ticker != "" and currentTicker == profile12_ticker and currentTimeframe == profile12_timeframe
+        shortEMAFast := profile12_fastEMA
+        shortEMASlow := profile12_slowEMA
+        profileMatched := "Profile 12"
+    else if profile13_enabled and profile13_ticker != "" and currentTicker == profile13_ticker and currentTimeframe == profile13_timeframe
+        shortEMAFast := profile13_fastEMA
+        shortEMASlow := profile13_slowEMA
+        profileMatched := "Profile 13"
+    else if profile14_enabled and profile14_ticker != "" and currentTicker == profile14_ticker and currentTimeframe == profile14_timeframe
+        shortEMAFast := profile14_fastEMA
+        shortEMASlow := profile14_slowEMA
+        profileMatched := "Profile 14"
+    else if profile15_enabled and profile15_ticker != "" and currentTicker == profile15_ticker and currentTimeframe == profile15_timeframe
+        shortEMAFast := profile15_fastEMA
+        shortEMASlow := profile15_slowEMA
+        profileMatched := "Profile 15"
+    else if profile16_enabled and profile16_ticker != "" and currentTicker == profile16_ticker and currentTimeframe == profile16_timeframe
+        shortEMAFast := profile16_fastEMA
+        shortEMASlow := profile16_slowEMA
+        profileMatched := "Profile 16"
+    else if profile17_enabled and profile17_ticker != "" and currentTicker == profile17_ticker and currentTimeframe == profile17_timeframe
+        shortEMAFast := profile17_fastEMA
+        shortEMASlow := profile17_slowEMA
+        profileMatched := "Profile 17"
+    else if profile18_enabled and profile18_ticker != "" and currentTicker == profile18_ticker and currentTimeframe == profile18_timeframe
+        shortEMAFast := profile18_fastEMA
+        shortEMASlow := profile18_slowEMA
+        profileMatched := "Profile 18"
+    else if profile19_enabled and profile19_ticker != "" and currentTicker == profile19_ticker and currentTimeframe == profile19_timeframe
+        shortEMAFast := profile19_fastEMA
+        shortEMASlow := profile19_slowEMA
+        profileMatched := "Profile 19"
+    else if profile20_enabled and profile20_ticker != "" and currentTicker == profile20_ticker and currentTimeframe == profile20_timeframe
+        shortEMAFast := profile20_fastEMA
+        shortEMASlow := profile20_slowEMA
+        profileMatched := "Profile 20"
+
+// === Map Shape & Position ===
+buyShape = signalShapeOpt == "Triangle" ? shape.triangleup : signalShapeOpt == "Circle" ? shape.circle : shape.diamond
+sellShape = signalShapeOpt == "Triangle" ? shape.triangledown : signalShapeOpt == "Circle" ? shape.circle : shape.diamond
+pos = signalPosOpt == "Above Bar" ? location.abovebar : signalPosOpt == "Below Bar" ? location.belowbar : signalPosOpt == "Top" ? location.top : location.bottom
+signalSize = size.tiny
+
+// === EMA Calculations ===
+emaShortFast = ta.ema(close, shortEMAFast)
+emaShortSlow = ta.ema(close, shortEMASlow)
+ema50 = ta.ema(close, ema50Period)
+ema100 = ta.ema(close, ema100Period)
+ema200 = ta.ema(close, ema200Period)
+
+// === Plot EMAs ===
+plot(showEMA50 ? ema50 : na, title="50 EMA", color=color.blue, linewidth=2)
+plot(showEMA100 ? ema100 : na, title="100 EMA", color=color.orange, linewidth=2)
+plot(showEMA200 ? ema200 : na, title="200 EMA", color=color.green, linewidth=2)
+
+// === Fill EMAs ===
+fastPlot = plot(showShortTF ? emaShortFast : na, title="Fast EMA")
+slowPlot = plot(showShortTF ? emaShortSlow : na, title="Slow EMA")
+fillColorEMAs = showShortTF ? (emaShortFast > emaShortSlow ? color.new(color.green, 50) : color.new(color.red, 50)) : na
+fill(fastPlot, slowPlot, color=fillColorEMAs)
+
+// === EMA on Chart Timeframe ===
+[emaShortFast_tf, emaShortSlow_tf] = request.security(syminfo.tickerid, timeframe.period, [ta.ema(close, shortEMAFast), ta.ema(close, shortEMASlow)], barmerge.gaps_off, barmerge.lookahead_off)
+
+// === Cross Signals ===
+buyShort_tf = ta.crossover(emaShortFast_tf, emaShortSlow_tf)
+sellShort_tf = ta.crossunder(emaShortFast_tf, emaShortSlow_tf)
+buySignal = showShortTF and showBuyShort and buyShort_tf
+sellSignal = showShortTF and showSellShort and sellShort_tf
+
+// === Plot Signals ===
+plotshape(buySignal, title="Buy Signal", location=pos, color=color.green, style=buyShape, size=signalSize, text="Buy (EMA)", textcolor=color.green)
+plotshape(sellSignal, title="Sell Signal", location=pos, color=color.red, style=sellShape, size=signalSize, text="Sell (EMA)", textcolor=color.red)
+
+// === Alert Conditions ===
+buyShortAlert = buyShort_tf
+if buyShortCondition == "Below 50 EMA"
+    buyShortAlert := buyShortAlert and emaShortFast_tf < ema50
+else if buyShortCondition == "Below 100 EMA"
+    buyShortAlert := buyShortAlert and emaShortFast_tf < ema100
+else if buyShortCondition == "Below 200 EMA"
+    buyShortAlert := buyShortAlert and emaShortFast_tf < ema200
+
+sellShortAlert = sellShort_tf
+if sellShortCondition == "Above 50 EMA"
+    sellShortAlert := sellShortAlert and emaShortFast_tf > ema50
+else if sellShortCondition == "Above 100 EMA"
+    sellShortAlert := sellShortAlert and emaShortFast_tf > ema100
+else if sellShortCondition == "Above 200 EMA"
+    sellShortAlert := sellShortAlert and emaShortFast_tf > ema200
+
+alertcondition(buyShortAlert, title="Buy EMA (Filtered)", message="EMA Crossover Buy Signal (Filtered) - {{ticker}} at {{close}}")
+alertcondition(sellShortAlert, title="Sell EMA (Filtered)", message="EMA Crossunder Sell Signal (Filtered) - {{ticker}} at {{close}}")
+alertcondition(buyShort_tf, title="Buy EMA (Pure)", message="EMA Crossover Buy Signal (Pure) - {{ticker}} at {{close}}")
+alertcondition(sellShort_tf, title="Sell EMA (Pure)", message="EMA Crossunder Sell Signal (Pure) - {{ticker}} at {{close}}")
+alertcondition(buySignal, title="Buy Signal Printed", message="Buy Signal Displayed - {{ticker}} at {{close}}")
+alertcondition(sellSignal, title="Sell Signal Printed", message="Sell Signal Displayed - {{ticker}} at {{close}}")
+alertcondition(buySignal or sellSignal, title="Any Signal", message="Signal Triggered - {{ticker}} at {{close}}")
+
+// === Display Table ===
+if showTable and barstate.islast
+    var table infoTable = table.new(f_getTablePosition(tablePosition), 2, 3, border_width = 1)
+    
+    table.clear(infoTable, 0, 0) // Clear previous table cells before drawing new ones
+    
+    // Header Row
+    table.cell(infoTable, 0, 0, "Active Profile", bgcolor=color.new(color.gray, 20), text_halign=text.align_center)
+    table.cell(infoTable, 1, 0, profileMatched, bgcolor=color.new(color.gray, 20), text_halign=text.align_center)
+
+    // Fast EMA Row
+    table.cell(infoTable, 0, 1, "Fast EMA", bgcolor=color.new(color.green, 80), text_halign=text.align_center)
+    table.cell(infoTable, 1, 1, str.tostring(shortEMAFast), bgcolor=color.new(color.green, 80), text_halign=text.align_center)
+
+    // Slow EMA Row
+    table.cell(infoTable, 0, 2, "Slow EMA", bgcolor=color.new(color.red, 80), text_halign=text.align_center)
+    table.cell(infoTable, 1, 2, str.tostring(shortEMASlow), bgcolor=color.new(color.red, 80), text_halign=text.align_center)
